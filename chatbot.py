@@ -269,7 +269,7 @@ def seq2seq_model(inputs, targets, keep_prob, batch_size, sequence_length, answe
                                                          
 # Setting the hyperparemeters
 epochs = 100 # Number of full training being done to the LSTM
-batch_size = 64 # Number of Inputs and Outputs being Processed at once
+batch_size = 128 # Number of Inputs and Outputs being Processed at once
 rnn_size = 512 # Number of Input Neurons
 num_layers = 3 # Number of hidden layers
 encoding_embedding_size = 512 # Number of columns in encoder embedding matrix
@@ -332,7 +332,7 @@ def split_into_batches(questions, answers, batch_size):
         answers_in_batch = answers[start_index:(start_index + batch_size)]
         padded_questions_in_batch = np.array(apply_padding(questions_in_batch, questions_words_to_int))
         padded_answers_in_batch = np.array(apply_padding(answers_in_batch, answers_words_to_int))
-    yield padded_questions_in_batch, padded_answers_in_batch
+        yield padded_questions_in_batch, padded_answers_in_batch
 
 
 # Splitting the questions and answers into the training and validation sets
@@ -352,7 +352,7 @@ early_stopping_check = 0 # Increments every time we have failed to reduce the lo
 early_stopping_stop = 1000 # If we fail to decrease the error 1000 times the training will end
 checkpoint = "chatbot_weights_ckpt" # File containing the saved weights so we do not have to retrain the chatbot
 session.run(tf.global_variables_initializer())
-
+print('*********Beginning Training*********')
 ############################################################### TRAINING LOOP ###############################################################
 
 for epoch in range(1, epochs + 1):
@@ -366,14 +366,15 @@ for epoch in range(1, epochs + 1):
         total_training_loss_error += batch_training_loss_error
         ending_time = time.time()
         batch_time = ending_time - starting_time
-        if batch_index % batch_index_check_training_loss == 0:
+        print('Batch Number: {:d} Complete, Time: {} Seconds'.format(batch_index + 1,batch_time))
+        if batch_index % batch_index_check_training_loss == 0 and batch_index > 0:
             print('Epoch: {:>3}/{}, Batch: {:>4}/{}, Training Loss Error: {:>6.3f}, Training Time on 100 Batches: {:d} seconds'.format(epoch,
                                                                                                                                        epochs,
                                                                                                                                        batch_index,
                                                                                                                                        len(training_questions) // batch_size,
                                                                                                                                        int(total_training_loss_error / batch_index_check_training_loss),
                                                                                                                                        int(batch_time * batch_index_check_training_loss)))
-                                                                                                                                        
+            total_training_loss_error = 0                                                                                                                            
         if batch_index % batch_index_check_validation_loss == 0 and batch_index > 0:
             total_validation_loss_error = 0
             starting_time = time.time()
