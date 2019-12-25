@@ -157,10 +157,10 @@ def encoder_rnn(rnn_inputs, rnn_size, num_layers, keep_prob, sequence_length):
     lstm_dropout = tf.contrib.rnn.DropoutWrapper(lstm, input_keep_prob = keep_prob)
     encoder_cell = tf.contrib.rnn.MultiRNNCell([lstm_dropout] * num_layers)
     encoder_output, encoder_state = tf.nn.bidirectional_dynamic_rnn(cell_fw = encoder_cell,
-                                                       cell_bw = encoder_cell,
-                                                       sequence_length = sequence_length,
-                                                       inputs = rnn_inputs,
-                                                       dtype = tf.float32)
+                                                                    cell_bw = encoder_cell,
+                                                                    sequence_length = sequence_length,
+                                                                    inputs = rnn_inputs,
+                                                                    dtype = tf.float32)
     return encoder_state
 
 # Decoding the training set
@@ -198,7 +198,8 @@ def decode_test_validation_set(encoder_state,decoder_cell, decoder_embeddings_ma
                                                                               attention_score_function,
                                                                               attention_construct_function,
                                                                               decoder_embeddings_matrix,
-                                                                              sos_id, eos_id,
+                                                                              sos_id, 
+                                                                              eos_id,
                                                                               maximum_length,
                                                                               num_words,
                                                                               name = "attn_dec_inf")
@@ -224,6 +225,7 @@ def decoder_rnn(decoder_embedded_input, decoder_embeddings_matrix, encoder_state
         training_predictions = decode_training_set(encoder_state,
                                                    decoder_cell,
                                                    decoder_embedded_input,
+                                                   sequence_length,
                                                    decoding_scope,
                                                    output_function,
                                                    keep_prob,
@@ -236,6 +238,7 @@ def decoder_rnn(decoder_embedded_input, decoder_embeddings_matrix, encoder_state
                                                        words_to_int['<EOS>'],
                                                        sequence_length - 1,
                                                        num_words,
+                                                       sequence_length, # Was Missing from the Tutorial???
                                                        decoding_scope,
                                                        output_function,
                                                        keep_prob,
@@ -264,31 +267,86 @@ def seq2seq_model(inputs, targets, keep_prob, batch_size, sequence_length, answe
                                                          batch_size)
     return training_predictions, test_predictions
                                                          
+# Setting the hyperparemeters
+epochs = 100 # Number of full training being done to the LSTM
+batch_size = 64 # Number of Inputs and Outputs being Processed at once
+rnn_size = 512 # Number of Input Neurons
+num_layers = 3 # Number of hidden layers
+encoding_embedding_size = 512 # Number of columns in encoder embedding matrix
+decoding_embedding_size = 512 # Number of columns in decoder embedding matrix
+learning_rate = 0.01 # The amount of the error that is backpropagated after each batch
+learning_rate_decay = 0.9 # Decays the learning rate to reduce overfitting
+min_learning_rate = 0.0001 # Lower Limit of the learning rate so the decaying stops after a certain point
+keep_probability = .5 # Must have the full name due to tensorflows api, the probability a neuron will be kept active during training, ie. the dropout rate
+
+# Defining a session
+tf.reset_default_graph() # This method should be called before each training session
+session = tf.InteractiveSession() # Defines a tensorflow session
+
+# Loading the model inputs
+inputs, targets, lr, keep_prob = model_inputs()
+
+# Setting the Sequence Length
+sequence_length = tf.placeholder_with_default(25,None, name= 'sequence_length') #Using Placeholder with default for when the placeholder is not fed into the RNN (?)
+
+# Getting the shape of the input tensor
+input_shape = tf.shape(inputs)
+
+# Getting the training and test predictions
+training_predictions, test_predictions = seq2seq_model(tf.reverse(inputs, [-1]),
+                                                       targets,
+                                                       keep_prob,
+                                                       batch_size,
+                                                       sequence_length,
+                                                       len(answers_words_to_int),
+                                                       len(questions_words_to_int),
+                                                       encoding_embedding_size,
+                                                       decoding_embedding_size,
+                                                       rnn_size,
+                                                       num_layers,
+                                                       questions_words_to_int)
+
+# Setting up the Loss Error (the output error), the Optimizer, and Gradient Clipping (Keeps gradient between a max and a min value)
+with tf.name_scope("optimization"):
+    loss_error = tf.contrib.seq2seq.sequence_loss(training_predictions,
+                                                  targets,
+                                                  tf.ones([input_shape[0],sequence_length]))
+    optimizer = tf.train.AdamOptimizer(learning_rate)
+    gradients = optimizer.compute_gradients(loss_error)
+    clipped_gradients = [(tf.clip_by_value(grad_tensor, -5.0, 5.0), grad_variable) for grad_tensor, grad_variable in gradients if grad_tensor is not None]
+    optimizer_gradient_clipping = optimizer.apply_gradients(clipped_gradients)
+
+# Padding the sequences with the <PAD> token
+# Question: ['Who','are','you' , <PAD> , <PAD>, <PAD>, <PAD>]
+# Answer:   [<SOS>, 'I', 'am', 'a', 'bot', '.' , <EOS>, <PAD>]
+def apply_padding(batch_of_sequences, word_to_int):
+    max_length = max( [len(sequence) for sequence in batch_of_sequences] ) # List Comprehension
+    padded_sequence = [sequence + ([word_to_int['<PAD>']] * (max_length - len(sequence))) for sequence in batch_of_sequences] # List Comprehension
+    return padded_sequence
+
+# Splitting the data into batches of questions(inputs) and answers(targets)
+def split_into_batches(questions, answers, batch_size):
+    for batch_index in range(0, (len(questions) // batch_size)):
+        start_index = batch_index * batch_size # The start index of the current batch
+        questions_in_batch = questions[start_index:(start_index + batch_size)]
+        answers_in_batch = answers[start_index:(start_index + batch_size)]
+        padded_questions_in_batch = np.array(apply_padding(questions_in_batch, questions_words_to_int))
+        padded_answers_in_batch = np.array(apply_padding(answers_in_batch, answers_words_to_int))
+    yield padded_questions_in_batch, padded_answers_in_batch
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+# Splitting the questions and answers into the training and validation sets
+training_validation_split = int(len(sorted_clean_questions) * 0.15) # Gets the index at 15% of the questions list
+training_questions = sorted_clean_questions[training_validation_split:] # Test Set
+training_answers = sorted_clean_answers[training_validation_split:] # Test Set
+validation_questions = sorted_clean_questions[:training_validation_split] # Validation Set
+validation_answers = sorted_clean_answers[:training_validation_split] # Validation Set  
+    
+    
+    
+    
+    
+    
 
 
 
