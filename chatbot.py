@@ -268,15 +268,15 @@ def seq2seq_model(inputs, targets, keep_prob, batch_size, sequence_length, answe
     return training_predictions, test_predictions
                                                          
 # Setting the hyperparemeters
-epochs = 100 # Number of full training being done to the LSTM
-batch_size = 128 # Number of Inputs and Outputs being Processed at once
+epochs = 65 # Number of full training being done to the LSTM, Original = 100
+batch_size = 128 # Number of Inputs and Outputs being Processed at once, Original = 64
 rnn_size = 512 # Number of Input Neurons
 num_layers = 3 # Number of hidden layers
 encoding_embedding_size = 512 # Number of columns in encoder embedding matrix
 decoding_embedding_size = 512 # Number of columns in decoder embedding matrix
-learning_rate = 0.01 # The amount of the error that is backpropagated after each batch
+learning_rate = 0.01 # The amount of the error that is backpropagated after each batch, Original = .01
 learning_rate_decay = 0.9 # Decays the learning rate to reduce overfitting
-min_learning_rate = 0.0001 # Lower Limit of the learning rate so the decaying stops after a certain point
+min_learning_rate = 0.0001 # Lower Limit of the learning rate so the decaying stops after a certain point, Original .0001
 keep_probability = .5 # Must have the full name due to tensorflows api, the probability a neuron will be kept active during training, ie. the dropout rate
 
 # Defining a session
@@ -344,13 +344,13 @@ validation_answers = sorted_clean_answers[:training_validation_split] # Validati
     
 # Training
     
-batch_index_check_training_loss = 100  # Checks the training loss every 100 batches
-batch_index_check_validation_loss = (len(training_questions) // batch_size// 2) - 1 # Checks the validation loss halfway and at the end of an epoch     
+batch_index_check_training_loss = 50  # Checks the training loss every 100 batches
+batch_index_check_validation_loss = (len(training_questions) // batch_size// 4) - 1 # Checks the validation loss at every quarter and at the end of an epoch     
 total_training_loss_error = 0 # Computes the training loss every 100 batches
 list_validation_loss_error = [] # To use the early stopping technique to check to see if we have reached a loss error below the minimum of all loss errors
 early_stopping_check = 0 # Increments every time we have failed to reduce the loss error
 early_stopping_stop = 1000 # If we fail to decrease the error 1000 times the training will end
-checkpoint = "chatbot_weights_ckpt" # File containing the saved weights so we do not have to retrain the chatbot
+checkpoint = "C:\\Users\\A.Miller\\Desktop\\Deep Learning NLP\\Deep NLP - Chatbot\\Chatbot-Deep-NLP\\chatbot_weights.ckpt" # File containing the saved weights so we do not have to retrain the chatbot (Using full path as only file name was throwing an exception)
 session.run(tf.global_variables_initializer())
 print('*********Beginning Training*********')
 ############################################################### TRAINING LOOP ###############################################################
@@ -364,15 +364,13 @@ for epoch in range(1, epochs + 1):
                                                                                                sequence_length: padded_answers_in_batch.shape[1],
                                                                                                keep_prob: keep_probability})
         total_training_loss_error += batch_training_loss_error
-        ending_time = time.time()
-        batch_time = ending_time - starting_time
-        print('Batch Number: {:d} Complete, Time: {} Seconds'.format(batch_index + 1,batch_time))
+        batch_time = time.time() - starting_time
         if batch_index % batch_index_check_training_loss == 0 and batch_index > 0:
-            print('Epoch: {:>3}/{}, Batch: {:>4}/{}, Training Loss Error: {:>6.3f}, Training Time on 100 Batches: {:d} seconds'.format(epoch,
+            print('Epoch: {:>3}/{}, Batch: {:>4}/{}, Training Loss Error: {:>6.3f}, Training Time on 50 Batches: {:d} seconds'.format(epoch,
                                                                                                                                        epochs,
                                                                                                                                        batch_index,
                                                                                                                                        len(training_questions) // batch_size,
-                                                                                                                                       int(total_training_loss_error / batch_index_check_training_loss),
+                                                                                                                                       total_training_loss_error / batch_index_check_training_loss,
                                                                                                                                        int(batch_time * batch_index_check_training_loss)))
             total_training_loss_error = 0                                                                                                                            
         if batch_index % batch_index_check_validation_loss == 0 and batch_index > 0:
@@ -385,8 +383,7 @@ for epoch in range(1, epochs + 1):
                                                                        sequence_length: padded_answers_in_batch.shape[1],
                                                                        keep_prob: 1})
                 total_validation_loss_error += batch_validation_loss_error
-            ending_time = time.time()
-            batch_time = ending_time - starting_time
+            batch_time = time.time() - starting_time
             average_validation_loss_error = total_validation_loss_error / (len(validation_questions)/ batch_size)                                                                                                                      
             print('Validation Loss Error {:>6.3f}, Batch Validation Time: {:d} seconds'.format(average_validation_loss_error, int(batch_time)))
             learning_rate *= learning_rate_decay
